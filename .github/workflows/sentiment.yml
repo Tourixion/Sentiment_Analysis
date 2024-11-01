@@ -1,4 +1,4 @@
-name: Gist Sentiment Analysis
+name: Multi-Gist Sentiment Analysis
 
 on:
   workflow_dispatch:      # Allow manual triggers
@@ -22,7 +22,9 @@ jobs:
 
     - name: Run sentiment analysis
       env:
-        GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  # Changed to use PAT
-        GIST_ID: ${{ secrets.DATA_GIST_ID }}
-        RESULTS_GIST_ID: ${{ secrets.RESULTS_GIST_ID }}
+        PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        GIST_ID_1: ${{ secrets.GIST_ID_1 }}
+        GIST_ID_2: ${{ secrets.GIST_ID_2 }}
+        RESULTS_GIST_ID_1: ${{ secrets.RESULTS_GIST_ID_1 }}
+        RESULTS_GIST_ID_2: ${{ secrets.RESULTS_GIST_ID_2 }}
       run: python sentiment_analysis.py
