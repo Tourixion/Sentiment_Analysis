@@ -13,8 +13,8 @@ from io import StringIO, BytesIO
 GITHUB_TOKEN = os.environ.get('PERSONAL_ACCESS_TOKEN')
 
 # Input gists
-INPUT_GIST_1 = os.environ.get('GIST_ID_1')
-INPUT_GIST_2 = os.environ.get('GIST_ID_2')
+INPUT_GIST_1 = os.environ.get('GIST_ID_2')
+INPUT_GIST_2 = os.environ.get('GIST_ID_1')
 
 # Output gists for GIST_ID_1
 OUTPUT_GIST_1 = os.environ.get('RESULTS_GIST_ID_1')  # HTML/viz for input 1
