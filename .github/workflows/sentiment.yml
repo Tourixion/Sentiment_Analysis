@@ -27,4 +27,7 @@ jobs:
         GIST_ID_2: ${{ secrets.GIST_ID_2 }}
         RESULTS_GIST_ID_1: ${{ secrets.RESULTS_GIST_ID_1 }}
         RESULTS_GIST_ID_2: ${{ secrets.RESULTS_GIST_ID_2 }}
+        RESULTS_GIST_ID_3: ${{ secrets.RESULTS_GIST_ID_3 }}
+        RESULTS_GIST_ID_4: ${{ secrets.RESULTS_GIST_ID_4 }}
       run: python sentiment_analysis.py
+
