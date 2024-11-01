@@ -7,7 +7,7 @@ import requests
 import json
 import os
 import base64
-from io import StringIO
+from io import StringIO, BytesIO
 import csv
 
 # GitHub Gist API configuration
@@ -31,7 +31,6 @@ def fetch_gist_content(gist_id):
 
 def process_reviews(content):
     """Process raw review content into a DataFrame"""
-    # Split content into lines and clean them
     lines = content.strip().split('\n')
     cleaned_reviews = []
     
@@ -39,21 +38,16 @@ def process_reviews(content):
     for line in lines:
         line = line.strip()
         if line:
-            # Check if this is a new review (by checking if it starts with a quote)
             if line.startswith('"') and current_review:
-                # Save previous review
                 cleaned_reviews.append(' '.join(current_review))
                 current_review = []
             
-            # Remove any surrounding quotes
             line = line.strip('"')
             current_review.append(line)
     
-    # Don't forget the last review
     if current_review:
         cleaned_reviews.append(' '.join(current_review))
     
-    # Create DataFrame
     return pd.DataFrame({'review': cleaned_reviews})
 
 print("Fetching data from Gist...")
@@ -69,7 +63,6 @@ analyzer = SentimentIntensityAnalyzer()
 def get_sentiment(text):
     """Get sentiment score for a piece of text"""
     try:
-        # Handle emoji by removing them (or you could keep them if VADER handles them well)
         text = ''.join(char for char in str(text) if ord(char) < 0x10000)
         return analyzer.polarity_scores(text)['compound']
     except Exception as e:
@@ -92,38 +85,31 @@ df['sentiment_category'] = df['sentiment_score'].apply(get_sentiment_category)
 
 # Create visualizations
 print("Generating visualizations...")
-plt.style.use('seaborn')
 fig = plt.figure(figsize=(15, 8))
 
 # Sentiment distribution
 plt.subplot(1, 2, 1)
-sns.histplot(data=df, x='sentiment_score', bins=30, color='skyblue')
-plt.title('Distribution of Sentiment Scores', pad=20)
+plt.hist(df['sentiment_score'], bins=30, color='skyblue', edgecolor='black')
+plt.title('Distribution of Sentiment Scores')
 plt.xlabel('Sentiment Score')
 plt.ylabel('Number of Reviews')
-
-# Add a vertical line at 0
 plt.axvline(x=0, color='red', linestyle='--', alpha=0.3)
+plt.grid(True, alpha=0.3)
 
 # Sentiment categories
 plt.subplot(1, 2, 2)
 sentiment_counts = df['sentiment_category'].value_counts()
 colors = ['#2ecc71', '#95a5a6', '#e74c3c']
-wedges, texts, autotexts = plt.pie(sentiment_counts, 
-                                  labels=sentiment_counts.index, 
-                                  autopct='%1.1f%%',
-                                  colors=colors, 
-                                  startangle=90)
-plt.title('Sentiment Distribution', pad=20)
-
-# Make the percentage labels easier to read
-plt.setp(autotexts, size=9, weight="bold")
-plt.setp(texts, size=10)
+plt.pie(sentiment_counts, 
+        labels=sentiment_counts.index, 
+        autopct='%1.1f%%',
+        colors=colors, 
+        startangle=90)
+plt.title('Sentiment Distribution')
 
 plt.tight_layout()
 
 # Save plot to bytes
-from io import BytesIO
 plot_buffer = BytesIO()
 plt.savefig(plot_buffer, format='png', dpi=300, bbox_inches='tight')
 plot_buffer.seek(0)
@@ -169,7 +155,7 @@ html_report = f"""
 
         <div class="visualization">
             <h2>Sentiment Analysis Visualization</h2>
-            <img src="data:image/png;base64,{plot_base64}" alt="Sentiment Analysis Visualization">
+            <img src="data:image/png;base64,{plot_base64}" alt="Sentiment Analysis Visualization" style="max-width: 100%; height: auto;">
         </div>
 
         <div class="reviews-sample">
