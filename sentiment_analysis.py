@@ -10,7 +10,7 @@ import base64
 from io import StringIO, BytesIO
 
 # GitHub Gist API configuration
-GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+GITHUB_TOKEN = os.environ.get('PERSONAL_ACCESS_TOKEN')  # Changed to match your existing token name
 INPUT_GIST_IDS = [os.environ.get('GIST_ID_1'), os.environ.get('GIST_ID_2')]
 OUTPUT_GIST_IDS = [os.environ.get('RESULTS_GIST_ID_1'), os.environ.get('RESULTS_GIST_ID_2')]
 
