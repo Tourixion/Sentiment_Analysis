@@ -8,12 +8,11 @@ import json
 import os
 import base64
 from io import StringIO, BytesIO
-import csv
 
 # GitHub Gist API configuration
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
-GIST_ID = os.environ.get('GIST_ID')
-RESULTS_GIST_ID = os.environ.get('RESULTS_GIST_ID')
+INPUT_GIST_IDS = [os.environ.get('GIST_ID_1'), os.environ.get('GIST_ID_2')]
+OUTPUT_GIST_IDS = [os.environ.get('RESULTS_GIST_ID_1'), os.environ.get('RESULTS_GIST_ID_2')]
 
 headers = {
     'Authorization': f'token {GITHUB_TOKEN}',
@@ -31,53 +30,20 @@ def fetch_gist_content(gist_id):
 
 def process_reviews(content):
     """Process raw review content into a DataFrame"""
-    # Split by newlines but preserve quoted content
-    reviews = []
-    current_review = []
-    
-    for line in content.split('\n'):
-        line = line.strip()
-        if not line:
-            if current_review:
-                reviews.append(' '.join(current_review))
-                current_review = []
-            continue
-            
-        # Handle quoted content
-        if line.startswith('"') and not line.endswith('"'):
-            # Start of a quoted review
-            if current_review:
-                reviews.append(' '.join(current_review))
-            current_review = [line.strip('"')]
-        elif line.endswith('"') and not line.startswith('"'):
-            # End of a quoted review
-            current_review.append(line.strip('"'))
-            reviews.append(' '.join(current_review))
-            current_review = []
-        elif line.startswith('"') and line.endswith('"'):
-            # Single-line quoted review
-            if current_review:
-                reviews.append(' '.join(current_review))
-            reviews.append(line.strip('"'))
-            current_review = []
-        else:
-            # Part of a multi-line review or unquoted review
-            if line:
-                current_review.append(line)
-    
-    # Don't forget the last review
-    if current_review:
-        reviews.append(' '.join(current_review))
-    
-    # Create DataFrame with index
-    return pd.DataFrame({'review': reviews, 'original_order': range(len(reviews))})
+    return pd.read_csv(StringIO(content))
 
-print("Fetching data from Gist...")
-content = fetch_gist_content(GIST_ID)
+print("Fetching data from Gists...")
+# Fetch and combine data from both input gists
+dfs = []
+for i, gist_id in enumerate(INPUT_GIST_IDS, 1):
+    print(f"Processing input gist {i}...")
+    content = fetch_gist_content(gist_id)
+    df = process_reviews(content)
+    dfs.append(df)
 
-print("Processing reviews...")
-df = process_reviews(content)
-print(f"Successfully loaded {len(df)} reviews")
+# Combine all reviews while maintaining order
+df = pd.concat(dfs, ignore_index=True)
+print(f"Successfully loaded {len(df)} total reviews")
 
 # Initialize VADER sentiment analyzer
 analyzer = SentimentIntensityAnalyzer()
@@ -85,8 +51,7 @@ analyzer = SentimentIntensityAnalyzer()
 def get_sentiment(text):
     """Get sentiment score for a piece of text"""
     try:
-        text = ''.join(char for char in str(text) if ord(char) < 0x10000)
-        scores = analyzer.polarity_scores(text)
+        scores = analyzer.polarity_scores(str(text))
         return scores['compound'], scores['pos'], scores['neu'], scores['neg']
     except Exception as e:
         print(f"Warning: Error processing text: {str(e)[:100]}")
@@ -106,9 +71,6 @@ def get_sentiment_category(score):
         return 'Neutral'
 
 df['sentiment_category'] = df['sentiment_score'].apply(get_sentiment_category)
-
-# Sort by original order
-df = df.sort_values('original_order')
 
 # Create visualizations
 print("Generating visualizations...")
@@ -142,11 +104,14 @@ plt.savefig(plot_buffer, format='png', dpi=300, bbox_inches='tight')
 plot_buffer.seek(0)
 plot_base64 = base64.b64encode(plot_buffer.getvalue()).decode()
 
-# Create detailed results CSV
-results_csv = df.to_csv(index=False)
+# Split results for two output gists
+mid_point = len(df) // 2
+df1 = df.iloc[:mid_point]
+df2 = df.iloc[mid_point:]
 
-# Create HTML report with table
-html_report = f"""
+def create_html_report(df_part, total_reviews, total_sentiment_counts):
+    """Create HTML report for a subset of reviews"""
+    return f"""
 <html>
 <head>
     <title>Museum Reviews Sentiment Analysis</title>
@@ -160,10 +125,7 @@ html_report = f"""
         .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }}
         .stat-box {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; text-align: center; }}
         .visualization {{ margin: 30px 0; text-align: center; }}
-        .reviews-sample {{ margin-top: 30px; }}
-        .review-card {{ background-color: #f8f9fa; padding: 15px; margin: 10px 0; border-radius: 5px; }}
         .table-container {{ max-height: 500px; overflow-y: auto; margin: 20px 0; }}
-        .download-links {{ margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px; }}
     </style>
 </head>
 <body>
@@ -172,30 +134,29 @@ html_report = f"""
         
         <div class="stats-grid">
             <div class="stat-box">
-                <h3>Total Reviews</h3>
-                <p>{len(df)}</p>
+                <h3>Reviews in This Part</h3>
+                <p>{len(df_part)} of {total_reviews}</p>
             </div>
             <div class="stat-box">
                 <h3>Average Sentiment</h3>
-                <p>{df['sentiment_score'].mean():.3f}</p>
+                <p>{df_part['sentiment_score'].mean():.3f}</p>
             </div>
             <div class="stat-box">
-                <h3>Positive Reviews</h3>
-                <p>{(df['sentiment_category'] == 'Positive').sum()} ({(df['sentiment_category'] == 'Positive').mean()*100:.1f}%)</p>
+                <h3>Overall Positive Reviews</h3>
+                <p>{total_sentiment_counts['Positive']} ({total_sentiment_counts['Positive']/total_reviews*100:.1f}%)</p>
             </div>
         </div>
 
         <div class="visualization">
-            <h2>Sentiment Analysis Visualization</h2>
+            <h2>Overall Sentiment Analysis</h2>
             <img src="data:image/png;base64,{plot_base64}" alt="Sentiment Analysis Visualization" style="max-width: 100%; height: auto;">
         </div>
 
-        <h2>Complete Results Table</h2>
+        <h2>Results Table</h2>
         <div class="table-container">
             <table>
                 <thead>
                     <tr>
-                        <th>Order</th>
                         <th>Review</th>
                         <th>Sentiment Score</th>
                         <th>Category</th>
@@ -206,10 +167,10 @@ html_report = f"""
                 </thead>
                 <tbody>
                     {''.join(
-                        f"<tr><td>{i+1}</td><td>{row['review'][:100]}...</td><td>{row['sentiment_score']:.3f}</td>" +
+                        f"<tr><td>{row['review']}</td><td>{row['sentiment_score']:.3f}</td>" +
                         f"<td>{row['sentiment_category']}</td><td>{row['positive_score']:.3f}</td>" +
                         f"<td>{row['neutral_score']:.3f}</td><td>{row['negative_score']:.3f}</td></tr>"
-                        for i, row in df.iterrows()
+                        for _, row in df_part.iterrows()
                     )}
                 </tbody>
             </table>
@@ -219,8 +180,8 @@ html_report = f"""
 </html>
 """
 
-# Update results Gist
-print("Updating results Gist...")
+# Create and update results in both output gists
+print("Updating results Gists...")
 def update_gist(gist_id, files_content):
     """Update a GitHub Gist with multiple files"""
     try:
@@ -241,17 +202,35 @@ def update_gist(gist_id, files_content):
         print(f"Error updating gist: {e}")
         raise
 
-# Update both HTML report and CSV in the same gist
-update_gist(RESULTS_GIST_ID, {
-    'museum_reviews_analysis.html': html_report,
-    'sentiment_results.csv': results_csv,
-    'sentiment_summary.json': json.dumps({
-        'total_reviews': len(df),
-        'average_sentiment': float(df['sentiment_score'].mean()),
-        'sentiment_distribution': sentiment_counts.to_dict(),
+# Get overall statistics for both reports
+total_reviews = len(df)
+total_sentiment_counts = df['sentiment_category'].value_counts().to_dict()
+
+# Update first output gist
+update_gist(OUTPUT_GIST_IDS[0], {
+    'museum_reviews_analysis_part1.html': create_html_report(df1, total_reviews, total_sentiment_counts),
+    'sentiment_results_part1.csv': df1.to_csv(index=False),
+    'sentiment_summary_part1.json': json.dumps({
+        'total_reviews': len(df1),
+        'average_sentiment': float(df1['sentiment_score'].mean()),
+        'sentiment_distribution': df1['sentiment_category'].value_counts().to_dict(),
         'timestamp': pd.Timestamp.now().isoformat()
     }, indent=2)
 })
 
-print("Analysis complete! Results have been updated to the Gist.")
+# Update second output gist
+update_gist(OUTPUT_GIST_IDS[1], {
+    'museum_reviews_analysis_part2.html': create_html_report(df2, total_reviews, total_sentiment_counts),
+    'sentiment_results_part2.csv': df2.to_csv(index=False),
+    'sentiment_summary_part2.json': json.dumps({
+        'total_reviews': len(df2),
+        'average_sentiment': float(df2['sentiment_score'].mean()),
+        'sentiment_distribution': df2['sentiment_category'].value_counts().to_dict(),
+        'timestamp': pd.Timestamp.now().isoformat()
+    }, indent=2)
+})
+
+print("Analysis complete! Results have been updated to both Gists.")
 print(f"Total reviews processed: {len(df)}")
+print("\nSentiment Distribution:")
+print(df['sentiment_category'].value_counts())
