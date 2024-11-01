@@ -22,7 +22,7 @@ jobs:
 
     - name: Run sentiment analysis
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  # Changed to use PAT
         GIST_ID: ${{ secrets.DATA_GIST_ID }}
         RESULTS_GIST_ID: ${{ secrets.RESULTS_GIST_ID }}
       run: python sentiment_analysis.py
